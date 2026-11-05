@@ -97,7 +97,7 @@ module.exports = async (req, res) => {
     }
 
     res.statusCode = 404;
-    res.end(`Not found: ${req.method} ${pathname}`);
+    res.end(`Not found: ${req.method} ${pathname} [__p=${u.searchParams.get("__p")}]`);
   } catch (err) {
     res.statusCode = 500;
     res.end("Server error: " + (err && err.message ? err.message : "unknown"));
