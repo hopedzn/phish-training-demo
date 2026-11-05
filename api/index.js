@@ -37,8 +37,11 @@ module.exports = async (req, res) => {
     const host = req.headers.host;
     const base = `https://${host}`;
     const u = new URL(req.url, base);
-    // Normalize: drop a trailing slash (Vercel may deliver /admin/add/).
-    let pathname = u.pathname;
+    // On Vercel the rewrite replaces the path with /api/index and passes the
+    // ORIGINAL path in the __p query param (see vercel.json). Fall back to the
+    // real pathname for local/`vercel dev` or a direct hit.
+    let pathname = u.searchParams.has("__p") ? "/" + u.searchParams.get("__p") : u.pathname;
+    // Normalize: drop a trailing slash.
     if (pathname.length > 1 && pathname.endsWith("/")) pathname = pathname.slice(0, -1);
 
     // 1. Click tracking: /t/:token
