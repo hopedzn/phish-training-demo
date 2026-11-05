@@ -51,39 +51,48 @@ Then open **http://localhost:3000/admin**.
 
 ## Part 1b — Deploy to Vercel
 
-Vercel is serverless, so two things differ from the local run:
+`server.js` is the single entrypoint. Vercel detects it and runs it directly
+(no `vercel.json` rewrite, no separate `api/` function). The only difference
+from local is storage:
 
-- The app runs as a function (`api/index.js`), not a long-running server.
-- There's no writable disk, so clicks are stored in **Upstash Redis** (free tier)
-  instead of `data.json`.
+- **Locally** (no Redis env vars): clicks go to a `data.json` file.
+- **On Vercel** (filesystem is read-only): clicks go to **Upstash Redis** (free tier),
+  selected automatically when the Redis env vars are present.
 
 ### Steps
 
-1. **Push this folder to a Git repo** (GitHub/GitLab) and **Import** it in Vercel, *or*
-   from this folder run:
+1. **Deploy** — push this folder to a Git repo and **Import** it in Vercel, *or* run
+   from this folder:
    ```bash
-   npx vercel        # first deploy (preview)
-   npx vercel --prod # production
+   npx vercel --prod
    ```
-2. **Add a Redis store.** In the Vercel dashboard → your project → **Storage** →
-   **Marketplace** → **Upstash for Redis** → create a database and **Connect** it to the
-   project. This auto-injects `KV_REST_API_URL` and `KV_REST_API_TOKEN` as env vars.
-3. **Redeploy** (Vercel does this automatically after connecting the store, or run
-   `npx vercel --prod` again) so the function picks up the env vars.
+2. **Add a Redis store.** Create an Upstash Redis database (Vercel **Storage** tab →
+   Marketplace → Upstash for Redis, or at upstash.com) and set its REST credentials as
+   project env vars — either naming works:
+   ```bash
+   npx vercel env add UPSTASH_REDIS_REST_URL   production   # paste the REST URL
+   npx vercel env add UPSTASH_REDIS_REST_TOKEN production   # paste the REST token
+   ```
+   (The code also accepts `KV_REST_API_URL` / `KV_REST_API_TOKEN`, which Vercel's
+   Upstash Marketplace integration injects automatically.)
+3. **Redeploy** so the running app picks up the env vars:
+   ```bash
+   npx vercel --prod --force
+   ```
 4. Open `https://<your-project>.vercel.app/admin`, generate links, and send them.
 
-> The code reads `KV_REST_API_URL`/`KV_REST_API_TOKEN` first, then falls back to
-> `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` — so either naming works.
+> If `/admin` loads but **generating a link returns a 500 (`EROFS … data.json`)**, the
+> Redis env vars aren't set — the app fell back to the read-only file store. Re-check
+> step 2 and redeploy.
 
-### Test locally against the same code path
+### Local test against Redis
 
-`vercel dev` runs the serverless function locally and pulls the linked env vars:
+`node server.js` uses the file store. To exercise the Redis path locally, export the
+same two env vars first:
 
 ```bash
-npx vercel dev   # serves api/index.js on http://localhost:3000
+UPSTASH_REDIS_REST_URL=... UPSTASH_REDIS_REST_TOKEN=... node server.js
 ```
-
-(Plain `node server.js` still works offline with the file store, for quick checks.)
 
 ---
 
@@ -140,9 +149,8 @@ clicked" number you asked for.
 
 ## Files
 
-- `lib.js` — shared page rendering + helpers (used by both entrypoints).
-- `server.js` — local runner; long-running server + `data.json` file store.
-- `api/index.js` — Vercel serverless function; Upstash Redis store.
-- `vercel.json` — rewrites all paths to the function.
-- `package.json` — the one dependency (`@upstash/redis`, only needed on Vercel).
+- `server.js` — the whole app (single entrypoint for local **and** Vercel); routes all
+  paths and picks Redis-or-file storage automatically.
+- `lib.js` — shared page rendering + helpers.
+- `package.json` — the one dependency (`@upstash/redis`, used when env vars are present).
 - `data.json` — created locally at runtime; safe to delete to reset.
