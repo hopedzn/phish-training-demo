@@ -75,6 +75,27 @@ function learnPage(label) {
     animation:flick 6s infinite;
   }
 
+  .stage{ display:flex; align-items:center; justify-content:center;
+          gap:clamp(14px,3.2vw,36px); flex-wrap:wrap; }
+  .mask{ width:clamp(84px,13vw,128px); height:auto; flex:none;
+         filter:drop-shadow(0 12px 28px rgba(0,0,0,.55));
+         transform-origin:50% 92%; animation:tilt 6.5s ease-in-out infinite; }
+  @keyframes tilt{ 0%,100%{transform:rotate(-3.5deg)} 50%{transform:rotate(3.5deg)} }
+
+  .sound{ position:fixed; right:16px; bottom:16px; z-index:6;
+          display:inline-flex; align-items:center; gap:9px;
+          font-family:"JetBrains Mono",monospace; font-size:12px; letter-spacing:.08em;
+          color:var(--amber); background:rgba(11,15,23,.9); backdrop-filter:blur(6px);
+          border:1px solid var(--line); border-radius:999px; padding:9px 15px; cursor:pointer; }
+  .sound:hover{ border-color:var(--amber-dim) }
+  .sound .bars{ display:inline-flex; gap:2.5px; align-items:flex-end; height:13px }
+  .sound .bars i{ width:2.5px; background:var(--amber); height:13px;
+                  animation:eq .9s infinite ease-in-out }
+  .sound .bars i:nth-child(2){ animation-delay:.18s }
+  .sound .bars i:nth-child(3){ animation-delay:.36s }
+  .sound.paused .bars i{ animation-play-state:paused; height:4px }
+  @keyframes eq{ 0%,100%{height:4px} 50%{height:13px} }
+
   .verdict{
     font-size:clamp(28px,6vw,46px); font-weight:700; letter-spacing:-.03em;
     margin:30px 0 6px; line-height:1.02;
@@ -113,7 +134,7 @@ function learnPage(label) {
     97%{ transform:none }
   }
   @media (prefers-reduced-motion:reduce){
-    .ascii,.dot{ animation:none }
+    .ascii,.dot,.mask,.sound .bars i{ animation:none }
   }
 </style></head>
 <body>
@@ -123,7 +144,23 @@ function learnPage(label) {
       <span class="right">Error 404 · flagged${who ? " · " + who : ""}</span>
     </div>
 
-    <div class="ascii-wrap">
+    <div class="stage">
+      <svg class="mask" viewBox="0 0 200 248" role="img" aria-label="Robber mask">
+        <path d="M100 10 C150 10 180 48 180 102 C180 162 150 222 100 238 C50 222 20 162 20 102 C20 48 50 10 100 10 Z"
+              fill="#f2ede3" stroke="#0a0f17" stroke-width="5"/>
+        <path d="M46 86 Q74 64 100 80 L98 92 Q74 78 52 96 Z" fill="#0a0f17"/>
+        <path d="M154 86 Q126 64 100 80 L102 92 Q126 78 148 96 Z" fill="#0a0f17"/>
+        <path d="M56 104 Q74 92 92 104 Q74 116 56 104 Z" fill="#0a0f17"/>
+        <path d="M108 104 Q126 92 144 104 Q126 116 108 104 Z" fill="#0a0f17"/>
+        <path d="M100 100 L90 150 Q100 160 110 150 Z" fill="none" stroke="#0a0f17" stroke-width="4" stroke-linejoin="round"/>
+        <path d="M100 166 C86 154 66 150 48 156 C30 162 28 178 40 182 C44 170 60 168 76 170 C86 171 95 172 100 166 Z"
+              fill="#0a0f17"/>
+        <path d="M100 166 C114 154 134 150 152 156 C170 162 172 178 160 182 C156 170 140 168 124 170 C114 171 105 172 100 166 Z"
+              fill="#0a0f17"/>
+        <path d="M100 162 C97 174 97 182 100 190 C103 182 103 174 100 162 Z" fill="#0a0f17"/>
+        <path d="M94 198 Q100 214 106 198 Q100 204 94 198 Z" fill="#0a0f17"/>
+      </svg>
+      <div class="ascii-wrap">
 <pre class="ascii" aria-label="O L E !">
 █████  █      █████  █
 █   █  █      █      █
@@ -131,6 +168,7 @@ function learnPage(label) {
 █   █  █      █
 █████  █████  █████  █
 </pre>
+      </div>
     </div>
 
     <p class="verdict">You just got <em>phished</em>.</p>
@@ -152,6 +190,10 @@ function learnPage(label) {
 
     <footer>Training routine${who ? " · " + who : ""} · this page logged a click, nothing more</footer>
   </main>
+
+  <button class="sound paused" id="sound" type="button" aria-label="Play music">
+    <span class="bars"><i></i><i></i><i></i></span> Bella ciao
+  </button>
 
   <script>
   (function(){
@@ -187,6 +229,51 @@ function learnPage(label) {
     }
     // brief hold on full scramble before it resolves
     setTimeout(function(){ requestAnimationFrame(tick); }, 420);
+  })();
+  </script>
+
+  <script>
+  (function(){
+    var btn = document.getElementById('sound');
+    if(!btn) return;
+    var ctx=null, playing=false, timer=null;
+    var N={E4:329.63,G4:392.00,Gs4:415.30,A4:440.00,B4:493.88,C5:523.25,D5:587.33,E5:659.25,A5:880.00};
+    // "Bella Ciao" — 19th-century public-domain folk melody, simplified.
+    var S=[
+      ['E4',1],['A4',1],['B4',1],['C5',1],['B4',1],['A4',2],
+      ['E4',1],['A4',1],['B4',1],['C5',1],['B4',1],['A4',2],
+      ['E4',1],['A4',1],['B4',1],['C5',1],['B4',1],['A4',1],['C5',1],
+      ['B4',1],['A4',1],['Gs4',1],['B4',1],['E4',2],
+      ['E5',1],['E5',1],['E5',1],['C5',1],['E5',2],
+      ['D5',1],['D5',1],['D5',1],['B4',1],['D5',2],
+      ['C5',1],['C5',1],['B4',1],['A4',1],['Gs4',1],['B4',1],['A4',3]
+    ];
+    var beat=0.21;
+    function tone(freq, start, dur){
+      var o=ctx.createOscillator(), g=ctx.createGain();
+      o.type='triangle'; o.frequency.value=freq;
+      o.connect(g); g.connect(ctx.destination);
+      var t=ctx.currentTime+start;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.16, t+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0006, t+dur*0.96);
+      o.start(t); o.stop(t+dur+0.02);
+    }
+    function play(){
+      if(!ctx) ctx=new (window.AudioContext||window.webkitAudioContext)();
+      if(ctx.state==='suspended') ctx.resume();
+      var at=0.06, total=0;
+      for(var i=0;i<S.length;i++){ var d=S[i][1]*beat; tone(N[S[i][0]], at, d*0.9); at+=d; total=at; }
+      playing=true; btn.classList.remove('paused');
+      clearTimeout(timer);
+      timer=setTimeout(function(){ playing=false; btn.classList.add('paused'); }, total*1000+250);
+    }
+    function stop(){ if(ctx){ try{ctx.close();}catch(e){} ctx=null; } playing=false; btn.classList.add('paused'); clearTimeout(timer); }
+    btn.addEventListener('click', function(){ if(playing) stop(); else play(); });
+    // kick off on the first interaction anywhere (autoplay with sound is blocked)
+    function kick(e){ if(e && btn.contains(e.target)) return; if(!playing) play(); off(); }
+    function off(){ window.removeEventListener('pointerdown',kick); window.removeEventListener('keydown',kick); }
+    window.addEventListener('pointerdown',kick); window.addEventListener('keydown',kick);
   })();
   </script>
 </body></html>`;
