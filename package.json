@@ -1,0 +1,12 @@
+{
+  "name": "phish-training-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Click-tracking phishing-awareness training demo (local + Vercel)",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@upstash/redis": "^1.34.3"
+  }
+}
