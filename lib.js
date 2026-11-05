@@ -54,6 +54,11 @@ function learnPage(label) {
   }
   .term{ width:100%; max-width:680px; position:relative; z-index:1; }
 
+  #rain{ position:fixed; inset:0; width:100%; height:100%; z-index:0; display:block; }
+  .veil{ position:fixed; inset:0; z-index:0; pointer-events:none;
+         background:radial-gradient(ellipse 72% 58% at 50% 40%,
+           rgba(6,8,13,.94) 0%, rgba(6,8,13,.8) 46%, rgba(6,8,13,.4) 100%); }
+
   .statusbar{
     display:flex; justify-content:space-between; align-items:center; gap:12px;
     font-family:"JetBrains Mono",monospace; font-size:11.5px; letter-spacing:.14em;
@@ -155,6 +160,8 @@ function learnPage(label) {
   }
 </style></head>
 <body>
+  <canvas id="rain" aria-hidden="true"></canvas>
+  <div class="veil" aria-hidden="true"></div>
   <main class="term">
     <div class="statusbar">
       <span class="live"><span class="dot"></span>Security awareness drill</span>
@@ -249,57 +256,67 @@ function learnPage(label) {
   })();
   </script>
 
+  <audio id="bc" src="/bella_ciao.mp3" loop preload="auto"></audio>
+
   <script>
+  /* Bella Ciao (user-supplied recording). Browsers block sound until a
+     gesture, so try on load and start on the first interaction of any kind. */
   (function(){
-    var btn = document.getElementById('sound');
-    if(!btn) return;
-    var ctx=null, playing=false, started=false, loopTimer=null;
-    var N={E4:329.63,G4:392.00,Gs4:415.30,A4:440.00,B4:493.88,C5:523.25,D5:587.33,E5:659.25,A5:880.00};
-    // "Bella Ciao" — 19th-century public-domain folk melody, simplified.
-    var S=[
-      ['E4',1],['A4',1],['B4',1],['C5',1],['B4',1],['A4',2],
-      ['E4',1],['A4',1],['B4',1],['C5',1],['B4',1],['A4',2],
-      ['E4',1],['A4',1],['B4',1],['C5',1],['B4',1],['A4',1],['C5',1],
-      ['B4',1],['A4',1],['Gs4',1],['B4',1],['E4',2],
-      ['E5',1],['E5',1],['E5',1],['C5',1],['E5',2],
-      ['D5',1],['D5',1],['D5',1],['B4',1],['D5',2],
-      ['C5',1],['C5',1],['B4',1],['A4',1],['Gs4',1],['B4',1],['A4',3]
-    ];
-    var beat=0.21;
-    function tone(freq, start, dur){
-      var o=ctx.createOscillator(), g=ctx.createGain();
-      o.type='triangle'; o.frequency.value=freq;
-      o.connect(g); g.connect(ctx.destination);
-      var t=ctx.currentTime+start;
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.linearRampToValueAtTime(0.16, t+0.02);
-      g.gain.exponentialRampToValueAtTime(0.0006, t+dur*0.96);
-      o.start(t); o.stop(t+dur+0.02);
-    }
-    function schedule(){
-      var at=0.06, total=0;
-      for(var i=0;i<S.length;i++){ var d=S[i][1]*beat; tone(N[S[i][0]], at, d*0.9); at+=d; total=at; }
-      clearTimeout(loopTimer);
-      loopTimer=setTimeout(function(){ if(playing) schedule(); }, total*1000+150); // loop
-    }
-    function play(){
-      if(!ctx) ctx=new (window.AudioContext||window.webkitAudioContext)();
-      if(ctx.resume) ctx.resume();
-      playing=true; started=true; btn.classList.remove('paused');
-      schedule();
-    }
-    function stop(){ playing=false; btn.classList.add('paused'); clearTimeout(loopTimer); if(ctx){ try{ctx.close();}catch(e){} ctx=null; } }
-    btn.addEventListener('click', function(e){ e.stopPropagation(); if(playing) stop(); else play(); });
-    // Autoplay-with-sound is blocked until a gesture, so: try on load, and start
-    // on the FIRST interaction of any kind (tap, scroll, key, move).
+    var a=document.getElementById('bc'), btn=document.getElementById('sound');
+    if(!a||!btn) return;
+    a.loop=true;
+    a.addEventListener('play', function(){ btn.classList.remove('paused'); });
+    a.addEventListener('pause', function(){ btn.classList.add('paused'); });
+    function tryplay(){ var p=a.play(); if(p && p.catch){ p.catch(function(){}); } }
+    btn.addEventListener('click', function(e){ e.stopPropagation(); if(a.paused) tryplay(); else a.pause(); });
     var EVS=['pointerdown','touchstart','click','keydown','scroll','wheel','mousemove'];
-    function kick(e){ if(e && btn.contains(e.target)) return; if(!started) play(); off(); }
+    function kick(e){ if(e && btn.contains(e.target)) return; tryplay(); if(!a.paused){ off(); } }
     function off(){ EVS.forEach(function(ev){ window.removeEventListener(ev,kick); }); }
     EVS.forEach(function(ev){ window.addEventListener(ev,kick,{passive:true}); });
-    window.addEventListener('load', function(){
-      if(started) return;
-      if(!ctx) ctx=new (window.AudioContext||window.webkitAudioContext)();
-      ctx.resume().then(function(){ if(!started && ctx.state==='running'){ play(); off(); } }).catch(function(){});
+    window.addEventListener('load', tryplay);
+  })();
+  </script>
+
+  <script>
+  /* Matrix-style digital rain (decorative background canvas) */
+  (function(){
+    var cv=document.getElementById('rain'); if(!cv) return;
+    var ctx=cv.getContext('2d'); if(!ctx) return;
+    var reduce=window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var chars='アイウエオカキクケコサシスセソタチツテトナニヌネノﾊﾋﾌﾍﾎ0123456789:=*+<>'.split('');
+    var font=16, cols=0, drops=[], w=0, h=0, dpr=1;
+    function resize(){
+      dpr=Math.min(window.devicePixelRatio||1, 1.5);
+      w=cv.width=Math.floor(window.innerWidth*dpr);
+      h=cv.height=Math.floor(window.innerHeight*dpr);
+      cv.style.width=window.innerWidth+'px'; cv.style.height=window.innerHeight+'px';
+      font=Math.max(13, Math.round(16*dpr));
+      cols=Math.ceil(w/font);
+      drops=[]; for(var i=0;i<cols;i++){ drops[i]=Math.floor(Math.random()*-60); }
+    }
+    resize(); window.addEventListener('resize', resize);
+    function frameDraw(){
+      ctx.fillStyle='rgba(6,8,13,0.085)'; ctx.fillRect(0,0,w,h);
+      ctx.font=font+'px monospace'; ctx.textBaseline='top';
+      for(var i=0;i<cols;i++){
+        var y=drops[i]*font;
+        var ch=chars[(Math.random()*chars.length)|0];
+        ctx.fillStyle = (Math.random()<0.02) ? 'rgba(190,255,210,0.85)' : 'rgba(38,170,86,0.5)';
+        ctx.fillText(ch, i*font, y);
+        if(y>h && Math.random()>0.975){ drops[i]=0; }
+        drops[i]++;
+      }
+    }
+    if(reduce){
+      ctx.fillStyle='rgba(38,170,86,0.22)'; ctx.font=font+'px monospace'; ctx.textBaseline='top';
+      for(var i=0;i<cols;i++){ ctx.fillText(chars[(Math.random()*chars.length)|0], i*font, Math.random()*h); }
+      return;
+    }
+    var raf, f=0;
+    function loop(){ raf=requestAnimationFrame(loop); f++; if(f%2){ return; } frameDraw(); }
+    loop();
+    document.addEventListener('visibilitychange', function(){
+      if(document.hidden){ cancelAnimationFrame(raf); } else { raf=requestAnimationFrame(loop); }
     });
   })();
   </script>

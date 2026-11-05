@@ -146,6 +146,21 @@ const server = http.createServer(async (req, res) => {
       return res.end();
     }
 
+    // Static: campaign audio (bundled with the deploy)
+    if (req.method === "GET" && pathname === "/bella_ciao.mp3") {
+      try {
+        const buf = fs.readFileSync(path.join(__dirname, "bella_ciao.mp3"));
+        res.writeHead(200, {
+          "Content-Type": "audio/mpeg",
+          "Content-Length": buf.length,
+          "Cache-Control": "public, max-age=86400",
+        });
+        return res.end(buf);
+      } catch (e) {
+        return send(res, 404, "text/plain", "audio not found");
+      }
+    }
+
     // 2. Educational landing page
     if (req.method === "GET" && pathname === "/learn") {
       return send(res, 200, "text/html; charset=utf-8", learnPage(u.searchParams.get("l") || ""));
