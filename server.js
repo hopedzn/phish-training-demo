@@ -146,16 +146,26 @@ const server = http.createServer(async (req, res) => {
       return res.end();
     }
 
-    // Static: campaign audio (bundled with the deploy)
+    // Static: campaign audio (bundled with the deploy).
+    // Range support is required or Safari/iOS won't play the file.
     if (req.method === "GET" && pathname === "/bella_ciao.mp3") {
       try {
-        const buf = fs.readFileSync(path.join(__dirname, "bella_ciao.mp3"));
-        res.writeHead(200, {
-          "Content-Type": "audio/mpeg",
-          "Content-Length": buf.length,
-          "Cache-Control": "public, max-age=86400",
-        });
-        return res.end(buf);
+        const file = path.join(__dirname, "bella_ciao.mp3");
+        const size = fs.statSync(file).size;
+        const range = req.headers.range;
+        const common = { "Content-Type": "audio/mpeg", "Accept-Ranges": "bytes", "Cache-Control": "public, max-age=86400" };
+        const m = range && /bytes=(\d+)-(\d*)/.exec(range);
+        if (m) {
+          const start = parseInt(m[1], 10);
+          const end = m[2] ? Math.min(parseInt(m[2], 10), size - 1) : size - 1;
+          res.writeHead(206, Object.assign({}, common, {
+            "Content-Range": `bytes ${start}-${end}/${size}`,
+            "Content-Length": end - start + 1,
+          }));
+          return fs.createReadStream(file, { start, end }).pipe(res);
+        }
+        res.writeHead(200, Object.assign({}, common, { "Content-Length": size }));
+        return fs.createReadStream(file).pipe(res);
       } catch (e) {
         return send(res, 404, "text/plain", "audio not found");
       }

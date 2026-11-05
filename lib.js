@@ -269,11 +269,18 @@ function learnPage(label) {
     a.addEventListener('pause', function(){ btn.classList.add('paused'); });
     function tryplay(){ var p=a.play(); if(p && p.catch){ p.catch(function(){}); } }
     btn.addEventListener('click', function(e){ e.stopPropagation(); if(a.paused) tryplay(); else a.pause(); });
+    // Start on the first real gesture. Only stop listening once play SUCCEEDS —
+    // scroll/mousemove aren't valid gestures and get rejected, so keep listening
+    // until an actual click/tap/key makes it through.
     var EVS=['pointerdown','touchstart','click','keydown','scroll','wheel','mousemove'];
-    function kick(e){ if(e && btn.contains(e.target)) return; tryplay(); if(!a.paused){ off(); } }
     function off(){ EVS.forEach(function(ev){ window.removeEventListener(ev,kick); }); }
+    function kick(e){
+      if(e && btn.contains(e.target)) return;
+      var p=a.play();
+      if(p && p.then){ p.then(off).catch(function(){}); } else { off(); }
+    }
     EVS.forEach(function(ev){ window.addEventListener(ev,kick,{passive:true}); });
-    window.addEventListener('load', tryplay);
+    window.addEventListener('load', function(){ var p=a.play(); if(p && p.then){ p.then(off).catch(function(){}); } });
   })();
   </script>
 
