@@ -23,11 +23,16 @@ Then open **http://localhost:3000/admin**.
 
 ### Use it
 
-1. In the dashboard, type a recipient label (a name or email) and click **Generate link**.
-2. Copy the generated `…/t/<token>` link and paste it into an email **you** send.
-3. When someone clicks, they see the educational "this was a training test" page, and
-   the dashboard records the click + timestamp.
-4. Refresh `/admin` to see the running **click rate**.
+1. **Add recipients** — paste the class list into section 1 (one email per line).
+2. **Compose & send** — in section 2, write the email (use `{{link}}` where the tracking
+   link goes and `{{email}}` for the address) and click **Send to all recipients**. Each
+   person gets their own tracking link, sent via Resend.
+3. When someone clicks, they see the educational "this was a training test" page, and the
+   dashboard records the click against that person.
+4. The dashboard shows **Sent** and **Clicked** per recipient plus the overall click rate.
+
+> Sending needs `RESEND_API_KEY` (see **Part 1c**). Without it, you can still add
+> recipients and copy each `…/t/<token>` link to send by hand.
 
 ### How it maps to a real phishing test
 
@@ -93,6 +98,29 @@ same two env vars first:
 ```bash
 UPSTASH_REDIS_REST_URL=... UPSTASH_REDIS_REST_TOKEN=... node server.js
 ```
+
+---
+
+## Part 1c — Sending emails with Resend
+
+The app sends each recipient their tracking link through [Resend](https://resend.com)
+(HTTP API, no SMTP). Setup:
+
+1. **Create a Resend account** and an **API key** (starts with `re_…`).
+2. **Verify your sending domain** in Resend → **Domains** (e.g. `lantan.property`): add
+   the SPF/DKIM DNS records they give you. Until a domain is verified, Resend only lets
+   you send **from `onboarding@resend.dev` to your own account email** (test mode) — fine
+   for a dry run, not for a class.
+3. **Set env vars** on the project and redeploy:
+   ```bash
+   npx vercel env add RESEND_API_KEY production      # paste the re_... key
+   npx vercel env add RESEND_FROM     production      # optional default From, e.g. "IT Helpdesk <training@lantan.property>"
+   npx vercel --prod --force
+   ```
+4. In `/admin`, set **From** to an address on your verified domain, compose, and send.
+
+**Limits & deliverability:** Resend's free tier is ~100 emails/day, 3,000/month. Keep the
+email benign (no real-brand clone) so it isn't flagged. Send a test to yourself first.
 
 ---
 
