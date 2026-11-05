@@ -39,7 +39,7 @@ function learnPage(label) {
     --amber:#ffb224; --amber-dim:#c9881a; --red:#ff4d4d; --cyan:#35c0e0;
   }
   *{box-sizing:border-box}
-  html,body{margin:0}
+  html,body{margin:0; overflow-x:hidden}
   body{
     background:var(--bg); color:var(--ink);
     font-family:"Inter",system-ui,sans-serif; line-height:1.55;
@@ -135,6 +135,23 @@ function learnPage(label) {
   }
   @media (prefers-reduced-motion:reduce){
     .ascii,.dot,.mask,.sound .bars i{ animation:none }
+  }
+  @media (max-width:560px){
+    body{ padding:26px 16px 80px; align-items:flex-start }
+    .statusbar{ flex-direction:column; align-items:flex-start; gap:6px;
+                font-size:10px; margin-bottom:26px }
+    .statusbar .right{ text-align:left }
+    .stage{ flex-direction:column; gap:14px }
+    .mask{ width:92px }
+    pre.ascii{ font-size:clamp(13px,6.4vw,24px) }
+    .verdict{ font-size:30px; margin-top:26px }
+    .sub{ font-size:16px }
+    .when{ font-size:12px }
+    .debrief{ margin-top:34px; padding-top:26px }
+    .debrief h2{ font-size:18px }
+    .signs li{ padding:13px 14px; gap:11px }
+    .signs .t{ font-size:14px }
+    .sound{ right:12px; bottom:12px; font-size:11px; padding:8px 13px }
   }
 </style></head>
 <body>
@@ -236,7 +253,7 @@ function learnPage(label) {
   (function(){
     var btn = document.getElementById('sound');
     if(!btn) return;
-    var ctx=null, playing=false, timer=null;
+    var ctx=null, playing=false, started=false, loopTimer=null;
     var N={E4:329.63,G4:392.00,Gs4:415.30,A4:440.00,B4:493.88,C5:523.25,D5:587.33,E5:659.25,A5:880.00};
     // "Bella Ciao" — 19th-century public-domain folk melody, simplified.
     var S=[
@@ -259,21 +276,31 @@ function learnPage(label) {
       g.gain.exponentialRampToValueAtTime(0.0006, t+dur*0.96);
       o.start(t); o.stop(t+dur+0.02);
     }
-    function play(){
-      if(!ctx) ctx=new (window.AudioContext||window.webkitAudioContext)();
-      if(ctx.state==='suspended') ctx.resume();
+    function schedule(){
       var at=0.06, total=0;
       for(var i=0;i<S.length;i++){ var d=S[i][1]*beat; tone(N[S[i][0]], at, d*0.9); at+=d; total=at; }
-      playing=true; btn.classList.remove('paused');
-      clearTimeout(timer);
-      timer=setTimeout(function(){ playing=false; btn.classList.add('paused'); }, total*1000+250);
+      clearTimeout(loopTimer);
+      loopTimer=setTimeout(function(){ if(playing) schedule(); }, total*1000+150); // loop
     }
-    function stop(){ if(ctx){ try{ctx.close();}catch(e){} ctx=null; } playing=false; btn.classList.add('paused'); clearTimeout(timer); }
-    btn.addEventListener('click', function(){ if(playing) stop(); else play(); });
-    // kick off on the first interaction anywhere (autoplay with sound is blocked)
-    function kick(e){ if(e && btn.contains(e.target)) return; if(!playing) play(); off(); }
-    function off(){ window.removeEventListener('pointerdown',kick); window.removeEventListener('keydown',kick); }
-    window.addEventListener('pointerdown',kick); window.addEventListener('keydown',kick);
+    function play(){
+      if(!ctx) ctx=new (window.AudioContext||window.webkitAudioContext)();
+      if(ctx.resume) ctx.resume();
+      playing=true; started=true; btn.classList.remove('paused');
+      schedule();
+    }
+    function stop(){ playing=false; btn.classList.add('paused'); clearTimeout(loopTimer); if(ctx){ try{ctx.close();}catch(e){} ctx=null; } }
+    btn.addEventListener('click', function(e){ e.stopPropagation(); if(playing) stop(); else play(); });
+    // Autoplay-with-sound is blocked until a gesture, so: try on load, and start
+    // on the FIRST interaction of any kind (tap, scroll, key, move).
+    var EVS=['pointerdown','touchstart','click','keydown','scroll','wheel','mousemove'];
+    function kick(e){ if(e && btn.contains(e.target)) return; if(!started) play(); off(); }
+    function off(){ EVS.forEach(function(ev){ window.removeEventListener(ev,kick); }); }
+    EVS.forEach(function(ev){ window.addEventListener(ev,kick,{passive:true}); });
+    window.addEventListener('load', function(){
+      if(started) return;
+      if(!ctx) ctx=new (window.AudioContext||window.webkitAudioContext)();
+      ctx.resume().then(function(){ if(!started && ctx.state==='running'){ play(); off(); } }).catch(function(){});
+    });
   })();
   </script>
 </body></html>`;
