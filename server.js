@@ -77,6 +77,36 @@ async function addClick(click) {
   }
 }
 
+async function updateRecipient(tok, patch) {
+  if (useRedis) {
+    const cur = (await redis.hget("recipients", tok)) || {};
+    await redis.hset("recipients", { [tok]: { ...cur, ...patch } });
+  } else {
+    const d = await loadData();
+    if (d.recipients[tok]) {
+      d.recipients[tok] = { ...d.recipients[tok], ...patch };
+      fs.writeFileSync(DATA_FILE, JSON.stringify(d, null, 2));
+    }
+  }
+}
+
+// --- Resend email transport ----------------------------------------------
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const RESEND_FROM = process.env.RESEND_FROM;
+
+async function sendEmail({ from, to, subject, html }) {
+  const r = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ from, to, subject, html }),
+  });
+  if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 200)}`);
+  return r.json();
+}
+
 // --- helpers --------------------------------------------------------------
 function send(res, status, type, body) {
   res.writeHead(status, { "Content-Type": type });
@@ -123,14 +153,50 @@ const server = http.createServer(async (req, res) => {
 
     // 3. Admin dashboard
     if (req.method === "GET" && (pathname === "/admin" || pathname === "/")) {
-      return send(res, 200, "text/html; charset=utf-8", adminPage(await loadData(), base));
+      const opts = {
+        notice: u.searchParams.get("notice") || "",
+        defaultFrom: RESEND_FROM || undefined,
+        resendReady: !!RESEND_API_KEY,
+      };
+      return send(res, 200, "text/html; charset=utf-8", adminPage(await loadData(), base, opts));
     }
 
-    // 4. Add a recipient
+    // 4. Add recipients (bulk: one per line or comma-separated)
     if (req.method === "POST" && pathname === "/admin/add") {
-      const label = (new URLSearchParams(await readBody(req)).get("label") || "").trim().slice(0, 120);
-      if (label) await addRecipient(label);
-      res.writeHead(302, { Location: "/admin" });
+      const raw = new URLSearchParams(await readBody(req)).get("labels") || "";
+      const labels = raw.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean).slice(0, 500);
+      for (const label of labels) await addRecipient(label.slice(0, 120));
+      const msg = `Added ${labels.length} recipient(s).`;
+      res.writeHead(302, { Location: `/admin?notice=${encodeURIComponent(msg)}` });
+      return res.end();
+    }
+
+    // 5. Send the campaign to all recipients via Resend
+    if (req.method === "POST" && pathname === "/admin/send") {
+      if (!RESEND_API_KEY) {
+        res.writeHead(302, { Location: `/admin?notice=${encodeURIComponent("RESEND_API_KEY not set — sending disabled.")}` });
+        return res.end();
+      }
+      const p = new URLSearchParams(await readBody(req));
+      const from = (p.get("from") || "").trim();
+      const subject = (p.get("subject") || "").trim();
+      const bodyTpl = p.get("body") || "";
+      const data = await loadData();
+      let sent = 0, failed = 0, firstErr = "";
+      for (const [tok, r] of Object.entries(data.recipients)) {
+        const link = `${base}/t/${tok}`;
+        const html = bodyTpl.split("{{link}}").join(link).split("{{email}}").join(r.label);
+        try {
+          await sendEmail({ from, to: r.label, subject, html });
+          await updateRecipient(tok, { sentAt: new Date().toISOString() });
+          sent++;
+        } catch (e) {
+          failed++;
+          if (!firstErr) firstErr = String((e && e.message) || e);
+        }
+      }
+      const msg = `Sent ${sent}${failed ? `, ${failed} failed — ${firstErr}` : ""}.`;
+      res.writeHead(302, { Location: `/admin?notice=${encodeURIComponent(msg)}` });
       return res.end();
     }
 
