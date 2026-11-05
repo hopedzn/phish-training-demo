@@ -20,47 +20,176 @@ function esc(s) {
 }
 
 // --- the educational landing page (the "reveal") --------------------------
+// A security-terminal "gotcha": ASCII OLÉ! scrambles in (machine/mono alarm),
+// then hands off to a calm human debrief (sans). One amber accent, one texture.
 function learnPage(label) {
+  const who = label ? esc(label) : "";
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Security Training</title>
+<title>Olé! — you got phished</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
-  :root { color-scheme: light dark; }
-  body { font-family: system-ui, -apple-system, sans-serif; margin: 0;
-         background: #0f172a; color: #e2e8f0; line-height: 1.6; }
-  .wrap { max-width: 640px; margin: 0 auto; padding: 48px 20px; }
-  .badge { display: inline-block; background: #f59e0b; color: #1e1b06;
-           font-weight: 700; padding: 6px 12px; border-radius: 999px;
-           font-size: 13px; letter-spacing: .3px; }
-  h1 { font-size: 28px; margin: 20px 0 8px; }
-  .card { background: #1e293b; border: 1px solid #334155; border-radius: 14px;
-          padding: 24px; margin: 24px 0; }
-  ul { padding-left: 20px; } li { margin: 8px 0; }
-  .muted { color: #94a3b8; font-size: 14px; }
-  code { background: #334155; padding: 2px 6px; border-radius: 6px; }
+  :root{
+    color-scheme: dark;
+    --bg:#06080d; --panel:#0b0f17; --line:#1a2130; --line-soft:#131925;
+    --ink:#eaeff7; --muted:#8a94a6; --faint:#5b6577;
+    --amber:#ffb224; --amber-dim:#c9881a; --red:#ff4d4d; --cyan:#35c0e0;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Inter",system-ui,sans-serif; line-height:1.55;
+    min-height:100vh; -webkit-font-smoothing:antialiased;
+    display:flex; align-items:center; justify-content:center; padding:40px 20px;
+  }
+  /* one faint texture: scanlines, not glows */
+  body::before{
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:2; opacity:.5;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 3px);
+    mix-blend-mode:overlay;
+  }
+  .term{ width:100%; max-width:680px; position:relative; z-index:1; }
+
+  .statusbar{
+    display:flex; justify-content:space-between; align-items:center; gap:12px;
+    font-family:"JetBrains Mono",monospace; font-size:11.5px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--faint);
+    border-bottom:1px solid var(--line-soft); padding-bottom:12px; margin-bottom:34px;
+  }
+  .statusbar .live{display:flex; align-items:center; gap:8px; color:var(--muted)}
+  .dot{width:7px; height:7px; border-radius:50%; background:var(--red);
+       box-shadow:0 0 0 0 rgba(255,77,77,.6); animation:pulse 1.8s infinite}
+  .statusbar .right{color:var(--amber-dim); text-align:right; word-break:break-all}
+
+  .ascii-wrap{ text-align:center; overflow:hidden; }
+  pre.ascii{
+    display:inline-block; margin:0; text-align:left;
+    font-family:"JetBrains Mono",monospace; font-weight:700;
+    font-size:clamp(11px, 4.4vw, 30px); line-height:1.02; letter-spacing:.04em;
+    color:var(--amber);
+    text-shadow:0 0 22px rgba(255,178,36,.28);
+    animation:flick 6s infinite;
+  }
+
+  .verdict{
+    font-size:clamp(28px,6vw,46px); font-weight:700; letter-spacing:-.03em;
+    margin:30px 0 6px; line-height:1.02;
+  }
+  .verdict em{ color:var(--amber); font-style:normal; }
+  .sub{ font-size:clamp(16px,2.4vw,19px); color:var(--muted); margin:0 0 4px; max-width:52ch }
+  .sub b{ color:var(--ink); font-weight:600 }
+  .when{
+    display:inline-block; margin-top:18px; font-family:"JetBrains Mono",monospace;
+    font-size:13px; letter-spacing:.06em; color:var(--amber);
+    border:1px solid var(--line); border-radius:8px; padding:8px 14px;
+  }
+  .when b{color:var(--ink)}
+
+  .debrief{ margin-top:46px; padding-top:30px; border-top:1px solid var(--line-soft) }
+  .debrief h2{ font-size:19px; font-weight:600; margin:0 0 10px; letter-spacing:-.01em }
+  .debrief p{ color:var(--muted); margin:0 0 22px; max-width:60ch }
+  .debrief p strong{ color:var(--ink); font-weight:600 }
+
+  .signs{ list-style:none; margin:0; padding:0; display:grid; gap:1px;
+          background:var(--line-soft); border:1px solid var(--line-soft); border-radius:12px; overflow:hidden }
+  .signs li{ background:var(--panel); padding:15px 18px; display:flex; gap:14px; align-items:baseline }
+  .signs .k{ font-family:"JetBrains Mono",monospace; color:var(--amber-dim); font-size:12px; flex:none; width:22px }
+  .signs .t{ font-size:14.5px; color:var(--ink) }
+  .signs .t span{ color:var(--muted) }
+
+  footer{ margin-top:30px; font-family:"JetBrains Mono",monospace; font-size:11.5px;
+          letter-spacing:.1em; text-transform:uppercase; color:var(--faint) }
+
+  @keyframes pulse{ 0%{box-shadow:0 0 0 0 rgba(255,77,77,.55)} 70%{box-shadow:0 0 0 7px rgba(255,77,77,0)} 100%{box-shadow:0 0 0 0 rgba(255,77,77,0)} }
+  @keyframes flick{
+    0%,90%,100%{ text-shadow:0 0 22px rgba(255,178,36,.28) }
+    92%{ text-shadow:2px 0 var(--red), -2px 0 var(--cyan), 0 0 22px rgba(255,178,36,.28) }
+    94%{ transform:translateX(-1px) }
+    96%{ text-shadow:-2px 0 var(--red), 2px 0 var(--cyan), 0 0 22px rgba(255,178,36,.28); transform:translateX(1px) }
+    97%{ transform:none }
+  }
+  @media (prefers-reduced-motion:reduce){
+    .ascii,.dot{ animation:none }
+  }
 </style></head>
-<body><div class="wrap">
-  <span class="badge">⚠️ TRAINING EXERCISE</span>
-  <h1>You clicked a simulated phishing link.</h1>
-  <p>Don't worry — <strong>nothing was installed and no information was taken.</strong>
-     This was a security-awareness test${label ? ` (<code>${esc(label)}</code>)` : ""}.
-     In a real attack, this click could have led to a fake login page or malware.</p>
+<body>
+  <main class="term">
+    <div class="statusbar">
+      <span class="live"><span class="dot"></span>Security awareness drill</span>
+      <span class="right">Error 404 · flagged${who ? " · " + who : ""}</span>
+    </div>
 
-  <div class="card">
-    <h2 style="margin-top:0">How to spot the next one</h2>
-    <ul>
-      <li><strong>Check the real link</strong> — hover before you click; the visible text can lie.</li>
-      <li><strong>Mismatched or odd sender address</strong>, especially "reply-to" that differs.</li>
-      <li><strong>Urgency &amp; pressure</strong> — "act now or your account is locked".</li>
-      <li><strong>Unexpected attachments</strong> or requests for credentials.</li>
-      <li><strong>When in doubt, don't click</strong> — open the site yourself from a bookmark.</li>
-    </ul>
-  </div>
+    <div class="ascii-wrap">
+<pre class="ascii" aria-label="O L E !">
+█████  █      █████  █
+█   █  █      █      █
+█   █  █      ████   █
+█   █  █      █
+█████  █████  █████  █
+</pre>
+    </div>
 
-  <p class="muted">Report suspicious emails to your security team. This exercise was
-     run with your organisation's authorisation for training purposes.</p>
-</div></body></html>`;
+    <p class="verdict">You just got <em>phished</em>.</p>
+    <p class="sub">This was a test — and you clicked it.</p>
+    <span class="when">See you in class · <b>9:30 sharp</b></span>
+
+    <section class="debrief">
+      <h2>Relax — no harm done.</h2>
+      <p>Nothing was installed. <strong>No password, data, or account was touched</strong> —
+         this link only recorded the click. It was a routine, authorised security-awareness
+         drill so the team can practise spotting the real thing. No one is in trouble; the
+         point is the lesson.</p>
+      <ul class="signs">
+        <li><span class="k">01</span><span class="t">Hover a link before clicking. <span>The text you see can lie about where it goes.</span></span></li>
+        <li><span class="k">02</span><span class="t">Check the sender's real address. <span>A familiar name is not a verified address.</span></span></li>
+        <li><span class="k">03</span><span class="t">Urgency is bait. <span>"Act now or lose access" is designed to stop you thinking.</span></span></li>
+      </ul>
+    </section>
+
+    <footer>Training routine${who ? " · " + who : ""} · this page logged a click, nothing more</footer>
+  </main>
+
+  <script>
+  (function(){
+    var pre = document.querySelector('.ascii');
+    if(!pre) return;
+    var final = pre.textContent;
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if(reduce){ return; }
+    var glyphs = '█▓▒░#@%&$*+=?/';
+    var chars = final.split('');
+    var order = [];
+    for(var i=0;i<chars.length;i++){ if(chars[i].trim() !== '') order.push(i); }
+    for(var j=order.length-1;j>0;j--){ var r=Math.floor(Math.random()*(j+1)); var tmp=order[j]; order[j]=order[r]; order[r]=tmp; }
+    var revealed = {};
+    function paint(){
+      var out = '';
+      for(var k=0;k<chars.length;k++){
+        if(chars[k].trim()===''){ out += chars[k]; }
+        else if(revealed[k]){ out += final[k]; }
+        else { out += glyphs[Math.floor(Math.random()*glyphs.length)]; }
+      }
+      pre.textContent = out;
+    }
+    paint();
+    var frame=0, total=66;
+    function tick(){
+      frame++;
+      var count = Math.floor(order.length * frame / total);
+      for(var k=0;k<count;k++){ revealed[order[k]] = true; }
+      paint();
+      if(frame < total){ setTimeout(function(){ requestAnimationFrame(tick); }, 46); }
+      else { pre.textContent = final; }
+    }
+    // brief hold on full scramble before it resolves
+    setTimeout(function(){ requestAnimationFrame(tick); }, 420);
+  })();
+  </script>
+</body></html>`;
 }
 
 // --- the admin / dashboard page -------------------------------------------
