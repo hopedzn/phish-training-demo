@@ -34,11 +34,13 @@ function send(res, status, type, body) {
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, `http://${req.headers.host}`);
   const base = `http://${req.headers.host}`;
+  let pathname = u.pathname;
+  if (pathname.length > 1 && pathname.endsWith("/")) pathname = pathname.slice(0, -1);
   const data = loadData();
 
   // 1. Click tracking: /t/:token
-  if (req.method === "GET" && u.pathname.startsWith("/t/")) {
-    const tok = u.pathname.slice(3);
+  if (req.method === "GET" && pathname.startsWith("/t/")) {
+    const tok = pathname.slice(3);
     const recip = data.recipients[tok];
     if (recip) {
       data.clicks.push({
@@ -54,17 +56,17 @@ const server = http.createServer((req, res) => {
   }
 
   // 2. Educational landing page
-  if (req.method === "GET" && u.pathname === "/learn") {
+  if (req.method === "GET" && pathname === "/learn") {
     return send(res, 200, "text/html; charset=utf-8", learnPage(u.searchParams.get("l") || ""));
   }
 
   // 3. Admin dashboard
-  if (req.method === "GET" && (u.pathname === "/admin" || u.pathname === "/")) {
+  if (req.method === "GET" && (pathname === "/admin" || pathname === "/")) {
     return send(res, 200, "text/html; charset=utf-8", adminPage(data, base));
   }
 
   // 4. Add a recipient (generate a token)
-  if (req.method === "POST" && u.pathname === "/admin/add") {
+  if (req.method === "POST" && pathname === "/admin/add") {
     let body = "";
     req.on("data", (c) => (body += c));
     req.on("end", () => {
@@ -79,7 +81,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  send(res, 404, "text/plain", "Not found");
+  send(res, 404, "text/plain", `Not found: ${req.method} ${pathname}`);
 });
 
 server.listen(PORT, () => {

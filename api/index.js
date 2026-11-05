@@ -37,10 +37,13 @@ module.exports = async (req, res) => {
     const host = req.headers.host;
     const base = `https://${host}`;
     const u = new URL(req.url, base);
+    // Normalize: drop a trailing slash (Vercel may deliver /admin/add/).
+    let pathname = u.pathname;
+    if (pathname.length > 1 && pathname.endsWith("/")) pathname = pathname.slice(0, -1);
 
     // 1. Click tracking: /t/:token
-    if (req.method === "GET" && u.pathname.startsWith("/t/")) {
-      const tok = u.pathname.slice(3);
+    if (req.method === "GET" && pathname.startsWith("/t/")) {
+      const tok = pathname.slice(3);
       const recip = await redis.hget("recipients", tok);
       if (recip) {
         await redis.rpush("clicks", {
@@ -56,17 +59,17 @@ module.exports = async (req, res) => {
     }
 
     // 2. Educational landing page
-    if (req.method === "GET" && u.pathname === "/learn") {
+    if (req.method === "GET" && pathname === "/learn") {
       return html(res, 200, learnPage(u.searchParams.get("l") || ""));
     }
 
     // 3. Admin dashboard
-    if (req.method === "GET" && (u.pathname === "/admin" || u.pathname === "/")) {
+    if (req.method === "GET" && (pathname === "/admin" || pathname === "/")) {
       return html(res, 200, adminPage(await loadData(), base));
     }
 
     // 4. Add a recipient
-    if (req.method === "POST" && u.pathname === "/admin/add") {
+    if (req.method === "POST" && pathname === "/admin/add") {
       // Vercel pre-parses urlencoded bodies into req.body; fall back to raw read.
       let label = "";
       if (req.body && typeof req.body === "object") {
@@ -91,7 +94,7 @@ module.exports = async (req, res) => {
     }
 
     res.statusCode = 404;
-    res.end("Not found");
+    res.end(`Not found: ${req.method} ${pathname}`);
   } catch (err) {
     res.statusCode = 500;
     res.end("Server error: " + (err && err.message ? err.message : "unknown"));
